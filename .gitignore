@@ -1,0 +1,10 @@
+.venv/
+.data/
+runtime_data/
+output/
+__pycache__/
+.agents/
+.codex/
+*.pyc
+*.db
+mail_config.local.bat

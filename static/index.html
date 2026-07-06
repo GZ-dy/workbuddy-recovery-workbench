@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI故障恢复验证工作台</title>
+  <style>
+    :root { --bg:#f4f6f8; --panel:#fff; --panel-soft:#f8fafc; --text:#18202a; --muted:#667085; --line:#d9e0e8; --primary:#155eef; --danger:#c4320a; --ok:#067647; --warn:#b54708; --neutral:#344054; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 "Segoe UI", "Microsoft YaHei", Arial, sans-serif; }
+    header { background:#101828; color:#fff; padding:14px 22px; display:flex; align-items:center; justify-content:space-between; gap:14px; }
+    h1 { margin:0; font-size:20px; font-weight:650; } h2 { margin:0 0 12px; font-size:16px; } h3 { margin:0 0 8px; font-size:14px; }
+    main { width:min(1500px,100%); margin:0 auto; padding:16px; display:grid; gap:14px; }
+    section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
+    textarea,input { width:100%; border:1px solid var(--line); border-radius:6px; padding:10px; font:inherit; resize:vertical; background:#fff; }
+    textarea { min-height:112px; }
+    button { border:0; border-radius:6px; padding:9px 12px; background:var(--primary); color:#fff; font-weight:650; cursor:pointer; white-space:nowrap; }
+    button.secondary { background:var(--neutral); } button.danger { background:var(--danger); } button.ghost { background:#fff; color:var(--neutral); border:1px solid var(--line); }
+    button:disabled { background:#98a2b3; cursor:not-allowed; border:0; color:#fff; }
+    pre { white-space:pre-wrap; margin:0; padding:12px; background:var(--panel-soft); border:1px solid var(--line); border-radius:6px; max-height:320px; overflow:auto; font-size:12px; }
+    .topbar { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:14px; }
+    .incident-hero { background:#0f172a; color:#fff; border:1px solid #0b1220; border-radius:14px; padding:16px; display:grid; gap:12px; box-shadow:0 16px 36px rgba(15,23,42,.18); }
+    .incident-hero .hero-grid { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,.6fr); gap:14px; align-items:stretch; }
+    .incident-hero .hero-title { font-size:22px; font-weight:800; line-height:1.2; }
+    .incident-hero .hero-sub { color:#cbd5e1; }
+    .hero-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .hero-card { background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:14px; }
+    .hero-card .hero-label { color:#cbd5e1; font-size:12px; margin-bottom:6px; }
+    .hero-card .hero-value { font-size:28px; font-weight:800; line-height:1.1; }
+    .hero-card .hero-note { color:#cbd5e1; margin-top:6px; font-size:12px; }
+    .workbench { display:grid; grid-template-columns:390px minmax(0,1fr) 360px; gap:14px; align-items:start; }
+    .stack { display:grid; gap:12px; align-content:start; } .row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; } .muted { color:var(--muted); } .small { font-size:12px; }
+    .section-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+    .metric { border:1px solid var(--line); border-radius:6px; padding:10px; background:#fff; min-height:74px; text-align:left; color:var(--text); } .metric b { display:block; color:var(--muted); font-size:12px; margin-bottom:4px; } .metric span { display:block; font-size:24px; font-weight:760; line-height:1.1; }
+    .metric.filter-active { border-color:var(--primary); box-shadow:0 0 0 3px #d1e0ff; }
+    .metric.warn span { color:var(--warn); } .metric.danger span { color:var(--danger); } .metric.ok span { color:var(--ok); }
+    .quick-systems { display:flex; flex-wrap:wrap; gap:8px; }
+    .quick-systems button { background:#fff; color:var(--neutral); border:1px solid var(--line); }
+    .quick-systems button.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+    .queue { display:grid; gap:8px; max-height:520px; overflow:auto; }
+    .queue button { display:grid; gap:5px; width:100%; text-align:left; color:var(--text); background:#fff; border:1px solid var(--line); white-space:normal; }
+    .queue button.waiting_manual_recovery { border-left:5px solid var(--primary); background:#f5f8ff; } .queue button.waiting_probe_result { border-left:5px solid #6172f3; } .queue button.observing { border-left:5px solid #f79009; background:#fffaeb; } .queue button.failed { border-left:5px solid var(--danger); background:#fff1f3; } .queue button.recovered { border-left:5px solid var(--ok); }
+    .queue-title { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+    .status { display:inline-block; padding:3px 8px; border-radius:999px; font-size:12px; font-weight:700; background:#eef4ff; color:#1849a9; }
+    .status.recovered { background:#ecfdf3; color:var(--ok); } .status.failed, .status.observation_same_alarm { background:#fff1f3; color:var(--danger); } .status.observing { background:#fffaeb; color:var(--warn); } .status.duplicate, .status.merged_duplicate { background:#f2f4f7; color:#475467; }
+    .detail-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+    .field { border:1px solid var(--line); border-radius:6px; padding:10px; min-height:62px; background:#fff; } .field b { display:block; color:var(--muted); font-size:12px; margin-bottom:4px; }
+    .timeline { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
+    .step { border:1px solid var(--line); border-radius:6px; padding:10px; min-height:86px; background:var(--panel-soft); position:relative; }
+    .step.done { border-color:#75e0a7; background:#f6fef9; }
+    .step.active { border-color:#f04438; background:#fff1f3; box-shadow:inset 0 0 0 1px #f04438, 0 0 0 3px #fee4e2; }
+    .step.active b { color:#b42318; }
+    .step.fail { border-color:#fda29b; background:#fff1f3; }
+    .step b { display:block; margin-bottom:4px; }
+    .action-panel { border:1px solid #84adff; border-radius:6px; padding:12px; background:#f5f8ff; display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; }
+    #manualRecoveryBtn:not(:disabled) { background:var(--primary); box-shadow:0 0 0 3px #d1e0ff; }
+    .two-col { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .command-list { display:grid; gap:8px; } .command-card { border:1px solid var(--line); border-radius:6px; padding:10px; background:var(--panel-soft); display:grid; gap:8px; }
+    .command-code { font-family:Consolas, "Courier New", monospace; font-size:12px; word-break:break-all; background:#fff; border:1px solid var(--line); border-radius:6px; padding:8px; }
+    .probe-history { display:grid; gap:8px; }
+    .probe-history-item { border:1px solid var(--line); border-radius:6px; padding:10px; background:#fff; display:grid; gap:6px; }
+    .probe-history-item.failed { border-color:#fda29b; background:#fff1f3; }
+    .probe-history-item.passed { border-color:#75e0a7; background:#f6fef9; }
+    .probe-history-item.unknown { border-color:#fec84b; background:#fffaeb; }
+    .probe-history-item pre { max-height:120px; }
+    .sms-list { display:grid; gap:8px; max-height:420px; overflow:auto; } .sms-item { border:1px solid var(--line); border-radius:6px; padding:10px; cursor:pointer; background:#fff; }
+    .sms-title { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; } .sms-preview { color:#344054; word-break:break-all; font-size:12px; margin-top:4px; }
+    .smart-note { border:1px solid #b2ddff; background:#eff8ff; color:#1849a9; border-radius:6px; padding:10px; font-size:13px; }
+    .observation-evidence.failed { border-color:#fda29b; background:#fff1f3; color:#b42318; }
+    .observation-evidence.ok { border-color:#75e0a7; background:#f6fef9; color:#067647; }
+    ul { margin:8px 0 0 18px; padding:0; }
+    .manual-box { border:1px dashed #98a2b3; background:#f8fafc; border-radius:6px; padding:12px; display:grid; gap:10px; }
+    .manual-header { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+    .manual-badges { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; }
+    .manual-badge { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:4px 10px; background:#eef4ff; color:#1849a9; border:1px solid #c7d7fe; font-size:12px; }
+    .manual-badge.strong { background:#eff8ff; color:#155eef; border-color:#b2ddff; }
+    .manual-links { display:grid; gap:8px; position:relative; z-index:2; }
+    .manual-links a { text-decoration:none; }
+    .manual-links button { background:#0f766e; }
+    .manual-open-btn { border:0; border-radius:10px; padding:10px 12px; color:#fff; font-weight:650; cursor:pointer; display:block; width:100%; text-align:left; position:relative; z-index:2; pointer-events:auto; }
+    .manual-open-btn.primary { background:#155eef; box-shadow:0 4px 12px rgba(21,94,239,.16); }
+    .manual-open-btn.secondary { background:#0f766e; }
+    .manual-open-btn.tertiary { background:#475467; }
+    .manual-meta { font-size:12px; color:#667085; margin:2px 0 8px 2px; }
+    .manual-empty { font-size:12px; color:#667085; }
+    .event-summary { background:#0f172a; color:#fff; border-radius:14px; padding:16px; display:grid; gap:10px; box-shadow:0 16px 36px rgba(15,23,42,.18); }
+    .event-summary .muted { color:#cbd5e1; }
+    .event-summary .summary-headline { font-size:22px; font-weight:800; line-height:1.2; }
+    .narrative-box { border:1px solid var(--line); border-radius:8px; padding:12px; background:#fff; }
+    .narrative-box.ok { border-color:#75e0a7; background:#f6fef9; }
+    .narrative-box.warn { border-color:#fec84b; background:#fffaeb; }
+    .narrative-box.danger { border-color:#fda29b; background:#fff1f3; }
+    .pill-row { display:flex; flex-wrap:wrap; gap:8px; }
+    .pill { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:999px; padding:6px 10px; background:#fff; font-size:12px; }
+    .pill b { color:var(--muted); }
+    .mini-list { margin:0; padding-left:18px; }
+    .focus-layout { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr); gap:12px; }
+    @media (max-width:1180px) { .topbar, .workbench, .detail-grid, .timeline, .two-col, .focus-layout { grid-template-columns:1fr; } .action-panel { align-items:stretch; } }
+  </style>
+</head>
+<body>
+<header><h1>AI故障恢复验证工作台</h1><span id="serviceState" class="muted">读取中</span></header>
+<main>
+  <div class="topbar">
+    <section class="stack">
+      <div class="section-head"><div><h2>现场故障录入</h2><div class="small muted">输入系统故障现象，先选系统再分析；短信、群消息、工单描述都可以放这里。</div></div><button id="importSmsBtn">创建验证事件</button></div>
+      <div class="quick-systems" id="systemQuick"><button data-system="BOMC">BOMC</button><button data-system="OPENAPI">OPENAPI</button><button data-system="实时营销">实时营销</button><button data-system="数字员工">数字员工</button><button data-system="IT工单系统">IT工单</button><button data-system="SmartBI">SmartBI</button><button data-system="下载中心">下载中心</button><button data-system="">不指定</button></div>
+      <div class="row"><label class="small muted" for="alarmTime">告警发生时间</label><input id="alarmTime" type="datetime-local" style="max-width:260px"></div>
+      <textarea id="smsText" placeholder="例如：系统无法打开、页面打不开、接口超时、数据库连接异常。先点上方系统按钮，会自动带入系统上下文。"></textarea>
+      <div class="row"><button id="importSmsInlineBtn">创建验证事件</button><span class="small muted">也可以按 Ctrl+Enter</span></div>
+      <div id="importMessage" class="smart-note">等待现场信息录入。输入故障现象后，点击“创建验证事件”。</div>
+    </section>
+    <section class="stack">
+      <h2>恢复状态总览</h2>
+      <div class="summary-grid"><button class="metric warn filter-active" data-filter="todo"><b>信息不足</b><span id="statTodo">0</span></button><button class="metric" data-filter="observing"><b>需继续观察</b><span id="statObserving">0</span></button><button class="metric danger" data-filter="failed"><b>未恢复</b><span id="statFailed">0</span></button><button class="metric ok" data-filter="recovered"><b>已恢复</b><span id="statRecovered">0</span></button></div><div id="queueFilterHint" class="small muted" style="margin-top:10px">当前筛选：信息不足</div>
+    </section>
+  </div>
+
+  <section class="incident-hero">
+    <div class="hero-grid">
+      <div class="hero-card">
+        <div class="hero-label">顶部：告警状态 + 当前结论</div>
+        <div id="heroTitle" class="hero-title">等待选择告警</div>
+        <div id="heroSubtitle" class="hero-sub" style="margin-top:6px">先从左侧选择一条事件，系统会自动给出当前流程结论。</div>
+        <div class="hero-actions" style="margin-top:12px">
+          <span id="currentStatus" class="status">未选择</span>
+          <span id="heroRisk" class="status">风险：-</span>
+          <span id="heroProbe" class="status">拨测：-</span>
+          <span id="heroObservation" class="status">观察：-</span>
+        </div>
+      </div>
+      <div class="hero-card">
+        <div class="hero-label">当前结论</div>
+        <div id="heroConclusion" class="hero-value">-</div>
+        <div id="heroNote" class="hero-note">等待选择事件</div>
+      </div>
+    </div>
+    <div class="event-summary" style="margin-top:0">
+      <div class="row" style="justify-content:space-between;align-items:flex-start"><div><div class="summary-headline">AI 自动判断 + 下一步动作</div><div id="summarySubTitle" class="small muted">先选左侧队列中的事件，系统会自动给出当前流程结论。</div></div></div>
+      <div class="pill-row" id="summaryPills"><span class="pill"><b>结论</b><span id="summaryConclusion">-</span></span><span class="pill"><b>风险</b><span id="summaryRisk">-</span></span><span class="pill"><b>拨测</b><span id="summaryProbe">-</span></span><span class="pill"><b>观察</b><span id="summaryObservation">-</span></span></div>
+      <div id="summaryNarrative" class="narrative-box warn" style="margin-top:10px">等待选择告警</div>
+      <div class="narrative-box" id="narrativeBox" style="margin-top:10px">
+        <b>当前最该做的一件事</b>
+        <div id="narrativeText" class="small muted">选择事件后，这里会直接告诉你该点什么、看什么。</div>
+        <ul id="narrativeList" class="mini-list"></ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="workbench">
+    <section class="stack"><div class="section-head"><h2>现场处置队列</h2><button id="refreshSmsBtn" class="ghost">刷新</button></div><div id="alarmList" class="queue muted">暂无告警</div><details><summary class="muted">补录一条现场描述</summary><div class="stack" style="margin-top:10px"><textarea id="alarmText" placeholder="例如：OPENAPI系统无法打开，业务接口访问超时"></textarea><button id="createAlarmBtn" class="secondary">创建并分析</button></div></details></section>
+    <section class="stack">
+      <div class="section-head"><div><h2>中间：AI 自动判断 + 下一步动作</h2><div id="currentHint" class="small muted">从左侧队列选择一条告警。</div></div></div>
+      <div id="workflowSteps" class="timeline"><div class="step"><b>1 告警导入</b><span class="muted">等待选择</span></div><div class="step"><b>2 人工处置</b><span class="muted">等待选择</span></div><div class="step"><b>3 拨测验证</b><span class="muted">等待选择</span></div><div class="step"><b>4 观察窗口</b><span class="muted">等待选择</span></div><div class="step"><b>5 结论报告</b><span class="muted">等待选择</span></div></div>
+      <div class="focus-layout">
+        <div class="stack">
+          <div class="manual-box">
+            <div class="manual-header">
+              <div>
+                <b>手册推荐 / 下一步动作</b>
+                <div class="small muted">系统自动给出下一步最该做的事，尽量减少手工判断。</div>
+              </div>
+              <div id="manualMatchSummary" class="manual-empty">手册：0 本</div>
+            </div>
+            <div id="systemHint" class="small muted"></div>
+            <div id="manualBadges" class="manual-badges"></div>
+            <div class="manual-links" id="manualLinks"><span class="muted small">未匹配到手册</span></div>
+          </div>
+          <div class="action-panel"><div><b>值班确认</b><div id="confirmNote" class="small muted">选择告警后确认故障处置动作是否完成。</div></div><div class="row"><button id="manualRecoveryBtn" disabled>值班确认：故障已处理</button><span id="countdown" class="status observing">观察窗口：未启动</span></div></div>
+          <div id="alarmDetail" class="detail-grid muted">选择告警后显示系统、类型、对象、指标和当前值。</div>
+          <div class="two-col"><section class="stack" style="padding:12px"><h3>AI关注项</h3><ul id="focusItems"></ul></section><section class="stack" style="padding:12px"><h3>建议拨测项</h3><ul id="probeItems"></ul></section></div>
+        </div>
+        <div class="stack">
+          <section class="stack" style="padding:12px"><h3>右侧：转发建议 / 手册 / 拨测</h3><div class="small muted">执行下面命令，把结果粘贴回来；只要能证明页面、接口或服务已恢复即可。</div><div id="probeCommands" class="command-list muted">选择告警后显示拨测命令。</div><div><b>拨测历史</b><div id="probeHistory" class="probe-history muted">暂无拨测记录。</div></div><textarea id="probeText" placeholder="例如：页面HTTP 200；接口返回正常；服务Running；端口TcpTestSucceeded=True"></textarea><div class="row"><button id="submitProbeBtn" disabled>提交拨测结果</button><span id="probeMessage" class="muted"></span></div></section>
+          <section class="stack" style="padding:12px"><h3>观察窗口结论</h3><div id="observationEvidence" class="smart-note observation-evidence">观察窗口未启动。</div><textarea id="observationAlarmText" placeholder="收到同类复发告警时粘贴原始BOMC短信；没有复发就点击确认，系统自动记录当前确认时间。"></textarea><div class="row"><button id="submitObservationAlarmBtn" class="danger" disabled>提交同类复发告警</button><button id="confirmNoAlarmBtn" disabled>截至当前确认无复发</button></div><div id="observationMessage" class="muted"></div></section>
+        </div>
+      </div>
+    </section>
+    <section class="stack"><div class="section-head"><h2>底部：时间线 + 证据 + 归档报告</h2><span class="small muted">最近50条</span></div><div id="smsInbox" class="sms-list muted">暂无记录</div><section class="stack" style="padding:12px"><div class="section-head"><h2>现场恢复报告</h2><div class="row"><button id="openReportBtn" disabled>打开现场报告</button><button id="sendReportMailBtn" class="secondary" disabled>自动发送邮件</button></div></div><div id="reportMailMessage" class="smart-note">报告按系统、处置、拨测、观察和风险生成；配置邮件参数后可自动发送。</div></section></section>
+  </div>
+</main>
+<script>
+  let currentAlarmId = null, timer = null, latestAlarms = [], latestSms = [], selectedSystem = "", queueFilter = "todo";
+  const $ = (id) => document.getElementById(id);
+  async function api(path, options = {}) { const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options }); const type = res.headers.get("content-type") || ""; if (!res.ok) { const text = await res.text(); let message = text; try { message = JSON.parse(text).detail || text; } catch (_) {} throw new Error(message); } return type.includes("application/json") ? res.json() : res.text(); }
+  function withSelectedSystem(rawText) { const text = rawText.trim(); if (!text) return ""; return selectedSystem && !text.toUpperCase().includes(selectedSystem.toUpperCase()) ? `${selectedSystem} ${text}` : text; }
+  function selectedAlarmTimeText() { const value = $("alarmTime").value; return value ? value.replace("T", " ") + ":00" : ""; }
+  function onsiteRawText() { const text = withSelectedSystem($("smsText").value); const alarmTime = selectedAlarmTimeText(); return alarmTime ? `告警发生时间：${alarmTime}\n${text}` : text; }
+  function setDefaultAlarmTime() { const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); $("alarmTime").value = now.toISOString().slice(0, 16); }
+  function eventTime(item) { return item.alarm_time || item.created_at || ""; }
+  async function setSystem(system) { selectedSystem = system; document.querySelectorAll("#systemQuick button").forEach((btn) => btn.classList.toggle("active", btn.dataset.system === system)); $("importMessage").textContent = system ? `已选择系统：${system}。输入故障现象后，点击“创建验证事件”。` : "未指定系统，将按文本内容自动识别。"; await loadProbeCommands(system, $("smsText").value.trim()); }
+  async function importSms() { const rawText = onsiteRawText(); if (!withSelectedSystem($("smsText").value)) { $("importMessage").textContent = "请先输入故障现象，再创建验证事件。"; return; } const result = await api("/api/sms/import", { method: "POST", body: JSON.stringify({ raw_text: rawText, sender: "现场录入", import_source: "onsite_input", force_new_event: true }) }); $("smsText").value = ""; setDefaultAlarmTime(); await refreshLeftLists(); const linked = result.items.find((item) => Number.isInteger(Number(item.alarm_id))); if (linked) { await loadAlarm(Number(linked.alarm_id)); $("importMessage").textContent = `已创建并选中本次恢复验证事件：新建${result.created}条，观察期同类复发${result.observation_failures}条。`; } else { $("importMessage").textContent = `已处理${result.imported}条输入，但没有形成可验证告警；请补充系统名、故障对象或原始BOMC短信。`; } }
+  async function createAlarm() { const rawText = withSelectedSystem($("alarmText").value); if (!rawText) return; const created = await api("/api/alarms", { method: "POST", body: JSON.stringify({ raw_text: rawText }) }); $("alarmText").value = ""; await loadAlarm(created.alarm_id); await refreshLeftLists(); }
+  async function refreshLeftLists() { const [alarms, sms] = await Promise.all([api("/api/alarms"), api("/api/sms/inbox")]); latestAlarms = alarms.items || []; latestSms = sms.items || []; renderStats(); renderAlarmQueue(); renderSmsInbox(); $("serviceState").textContent = `已加载 ${latestAlarms.length} 条告警 / ${latestSms.length} 条短信`; if (!currentAlarmId) { const first = latestAlarms.find(matchesFilter) || latestAlarms[0]; if (first) await loadAlarm(first.id); } }
+  function renderStats() { $("statTodo").textContent = latestAlarms.filter((a) => ["waiting_manual_recovery", "waiting_probe_result"].includes(a.status)).length; $("statObserving").textContent = latestAlarms.filter((a) => a.status === "observing").length; $("statFailed").textContent = latestAlarms.filter((a) => a.status === "failed").length; $("statRecovered").textContent = latestAlarms.filter((a) => a.status === "recovered").length; document.querySelectorAll("[data-filter]").forEach((btn) => btn.classList.toggle("filter-active", btn.dataset.filter === queueFilter)); $("queueFilterHint").textContent = `当前筛选：${filterLabel(queueFilter)}`; }
+  function renderAlarmQueue() { const list = $("alarmList"); const items = latestAlarms.filter(matchesFilter); if (!items.length) { list.textContent = `暂无${filterLabel(queueFilter)}事件`; return; } list.innerHTML = ""; items.forEach((item) => { const btn = document.createElement("button"); btn.className = item.status; btn.innerHTML = `<span class="queue-title"><b>#${item.id} ${escapeHtml(item.system_name || "未知系统")}</b><span class="status ${item.status}">${statusLabel(item.status)}</span></span><span>${escapeHtml(item.alarm_type || "通用告警")} / ${escapeHtml(item.object_name || "未知对象")}</span><span class="small muted">${escapeHtml(eventTime(item))}</span>`; btn.onclick = () => loadAlarm(item.id); list.appendChild(btn); }); }
+  function matchesFilter(item) { if (queueFilter === "todo") return ["waiting_manual_recovery", "waiting_probe_result"].includes(item.status); return item.status === queueFilter; }
+  function filterLabel(filter) { return { todo:"信息不足", observing:"需继续观察", failed:"未恢复", recovered:"已恢复" }[filter] || "全部"; }
+  function renderSmsInbox() { const list = $("smsInbox"); if (!latestSms.length) { list.textContent = "暂无短信"; return; } list.innerHTML = ""; latestSms.forEach((item) => { const row = document.createElement("div"); row.className = "sms-item"; row.innerHTML = `<div class="sms-title"><span>#${item.id} ${escapeHtml(item.sender || "人工转发")}</span><span class="status ${item.status}">${statusLabel(item.status)}</span></div><div class="small muted">${escapeHtml(item.system_name || "未创建告警")} / ${escapeHtml(item.alarm_type || "未解析")} / ${escapeHtml(statusLabel(item.alarm_status || ""))}</div><div class="sms-preview">${escapeHtml(truncate(item.raw_text, 90))}</div>`; if (item.linked_alarm_id) row.onclick = () => loadAlarm(item.linked_alarm_id); list.appendChild(row); }); }
+  async function loadAlarm(id) { const alarmId = Number(id); if (!Number.isInteger(alarmId) || alarmId <= 0) { showError(new Error("请先选择一条有效告警")); return; } const data = await api(`/api/alarms/${alarmId}`); currentAlarmId = Number(data.alarm.id); renderAlarm(data); renderReport(data.report); startCountdown(data.observation_window); }
+  function renderAlarm(data) {
+    window.__CURRENT_ALARM__ = data.alarm;
+    const alarm = data.alarm;
+    const meta = data.report_meta || {};
+    const probes = data.probe_results || [];
+    const latestProbe = probes[probes.length - 1];
+    const windowData = data.observation_window;
+    const conclusion = meta.conclusion || statusLabel(alarm.status);
+    const summaryConclusions = { recovered: "已恢复", failed: "未恢复", observing: "需继续观察", waiting_probe_result: "待拨测验证", waiting_manual_recovery: "待人工确认处置" };
+    const summaryRisks = { recovered: "低", failed: "高", observing: "中", waiting_probe_result: "中", waiting_manual_recovery: "中" };
+    const summaryProbe = { passed: "成功", failed: "失败", unknown: "待人工复核" };
+    const summaryObservation = { recovered: "无复发", failed: "有复发", observing: "观察中", waiting_probe_result: "未启动", waiting_manual_recovery: "未启动" };
+    const narrativeItems = [
+      meta.conclusion_reason || confirmNoteForStatus(alarm.status),
+      meta.acceptance_summary || "当前证据不足以形成恢复闭环。",
+      ...(meta.next_actions || []),
+    ];
+    const summaryTitle = `#${alarm.id} ${alarm.system_name || "未知系统"}`;
+    const summaryReason = meta.conclusion_reason || confirmNoteForStatus(alarm.status);
+    const summaryActions = (meta.next_actions || []).slice(0, 3);
+    $("heroTitle").textContent = summaryTitle;
+    $("heroSubtitle").textContent = meta.decision_gate || summaryReason;
+    $("heroConclusion").textContent = conclusion;
+    $("heroNote").textContent = meta.acceptance_summary || summaryReason || "选择事件后将自动生成接手提示。";
+    $("heroRisk").textContent = `风险：${summaryRisks[alarm.status] || "-"}`;
+    $("heroProbe").textContent = `拨测：${summaryProbe[latestProbe?.probe_status] || (latestProbe ? probeStatusLabel(latestProbe.probe_status) : "未判断")}`;
+    $("heroObservation").textContent = `观察：${summaryObservation[alarm.status] || (windowData ? statusLabel(windowData.status) : "未启动")}`;
+    $("summarySubTitle").textContent = meta.decision_gate || summaryReason;
+    $("summaryPill").textContent = summaryConclusions[alarm.status] || conclusion;
+    $("summaryPill").className = `status ${alarm.status}`;
+    $("summaryConclusion").textContent = conclusion;
+    $("summaryRisk").textContent = summaryRisks[alarm.status] || "-";
+    $("summaryProbe").textContent = summaryProbe[latestProbe?.probe_status] || (latestProbe ? probeStatusLabel(latestProbe.probe_status) : "未判断");
+    $("summaryObservation").textContent = summaryObservation[alarm.status] || (windowData ? statusLabel(windowData.status) : "未启动");
+    $("summaryNarrative").className = `narrative-box ${alarm.status === "recovered" ? "ok" : alarm.status === "failed" ? "danger" : "warn"}`;
+    $("summaryNarrative").textContent = meta.acceptance_summary || summaryReason || "等待恢复结论";
+    $("narrativeText").textContent = meta.acceptance_summary || summaryReason || "选择事件后将自动生成接手提示。";
+    $("narrativeList").innerHTML = (summaryActions.length ? summaryActions : ["确认现场处置动作", "提交真实拨测结果", "完成观察窗口确认"]).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+    $("currentStatus").textContent = conclusion;
+    $("currentStatus").className = `status ${alarm.status}`;
+    $("currentHint").textContent = `#${alarm.id} ${alarm.system_name || "未知系统"} / ${alarm.alarm_type || "通用告警"} / ${meta.decision_gate || conclusion}`;
+    $("systemHint").textContent = data.detected_system ? `识别系统：${data.detected_system}${data.system_hints?.length ? `；候选手册：${data.system_hints.join(" / ")}` : ""}` : "未识别到系统，建议先点上方系统按钮再录入。";
+    $("alarmDetail").innerHTML = [["系统名称", alarm.system_name],["告警类型", alarm.alarm_type],["告警级别", alarm.alarm_level],["告警对象", alarm.object_name],["指标名称", alarm.metric_name],["当前值", alarm.current_value || "未提取"]].map(([k, v]) => `<div class="field"><b>${k}</b><span>${escapeHtml(v || "")}</span></div>`).join("");
+    renderList("focusItems", data.focus_items);
+    renderList("probeItems", data.recommended_probe_items);
+    renderProbeCommands(data.recommended_probe_commands || []);
+    renderProbeHistory(probes);
+    renderWorkflow(data);
+    renderObservationEvidence(data);
+    renderManualLinks(data.manual_links || []);
+    renderNarrative(data, latestProbe, windowData, meta);
+    const retryingObservation = alarm.status === "waiting_probe_result" && windowData?.same_alarm_received;
+    const retryingFailedProbe = ["waiting_probe_result", "failed"].includes(alarm.status) && latestProbe?.probe_status === "failed";
+    $("manualRecoveryBtn").disabled = alarm.status !== "waiting_manual_recovery";
+    $("manualRecoveryBtn").textContent = "确认处置完成，进入拨测";
+    $("submitProbeBtn").disabled = !(alarm.status === "waiting_probe_result" || retryingFailedProbe);
+    $("submitObservationAlarmBtn").disabled = alarm.status !== "observing";
+    $("confirmNoAlarmBtn").disabled = alarm.status !== "observing";
+    $("confirmNote").textContent = retryingObservation ? "观察期收到同类复发告警，继续排障后在下方重新提交拨测结果。" : retryingFailedProbe ? "上轮拨测失败，继续排障后在下方重新提交拨测结果。" : confirmNoteForStatus(alarm.status);
+    $("probeMessage").textContent = retryingObservation ? "观察期收到同类复发告警，已退回拨测验证；请继续拨测。" : retryingFailedProbe ? `上轮拨测失败：${latestProbe.ai_summary}；请继续拨测。` : latestProbe ? `拨测结论：${probeStatusLabel(latestProbe.probe_status)}；${latestProbe.ai_summary}` : "请录入真实拨测输出，不能仅凭“已处理”认定恢复。";
+    $("observationMessage").textContent = observationWindowText(windowData, alarm.status);
+    $("openReportBtn").disabled = false;
+    $("sendReportMailBtn").disabled = false;
+  }
+  function renderManualLinks(links) { const node = $("manualLinks"); const badgeNode = $("manualBadges"); const summaryNode = $("manualMatchSummary"); const items = (links && links.length) ? links : buildFallbackManualLinks(); summaryNode.textContent = `手册：${items.length} 本`; badgeNode.innerHTML = items.slice(0, 3).map((link) => `<span class="manual-badge ${Number(link.score || 0) >= 0.8 ? 'strong' : ''}">${escapeHtml(link.system || '通用')} · ${escapeHtml(link.score ?? '0')}</span>`).join(''); if (!items.length) { node.innerHTML = '<div class="manual-empty">未匹配到手册，已启用通用兜底规则。</div>'; node.dataset.links = "[]"; return; } node.dataset.links = JSON.stringify(items); node.innerHTML = items.map((link, index) => `<button type="button" class="manual-open-btn ${index === 0 ? 'primary' : index === 1 ? 'secondary' : 'tertiary'}" data-index="${index}" data-url="${link.url}" title="${escapeHtml(link.reason || '')}">${escapeHtml(link.title)}</button><div class="manual-meta">匹配分数：${escapeHtml(link.score ?? "待人工补充")}；推荐原因：${escapeHtml(link.reason || "待人工补充")}</div>`).join(""); node.querySelectorAll('.manual-open-btn').forEach(btn => { btn.addEventListener('click', (event) => { event.preventDefault(); event.stopPropagation(); selectManualLink(Number(btn.dataset.index)); }); }); }
+  function buildFallbackManualLinks() { const alarm = window.__CURRENT_ALARM__ || {}; const text = [alarm.system_name, alarm.alarm_type, alarm.object_name, alarm.metric_name, alarm.current_value].filter(Boolean).join(' '); const system = String(alarm.system_name || '').toLowerCase(); const query = encodeURIComponent(text || '故障 处置 手册'); const base = 'https://www.bing.com/search?q='; const options = []; if (/(openapi|api)/i.test(system + ' ' + text)) options.push({ title: 'OPENAPI 接口超时与调用失败排查', url: `${base}${query}+OPENAPI+接口+超时+排查`, score: '0.86', reason: '识别到 OPENAPI / 接口类关键词，优先查接口与依赖链路。' }); if (/(bomc|告警|短信)/i.test(system + ' ' + text)) options.push({ title: 'BOMC 告警与短信告警处置手册', url: `${base}${query}+BOMC+告警+处置`, score: '0.82', reason: '识别到 BOMC / 告警 / 短信关键词，适合查告警分流和短信链路。' }); if (/(smartbi|bi|报表)/i.test(system + ' ' + text)) options.push({ title: 'SmartBI 报表与页面打不开排查', url: `${base}${query}+SmartBI+页面+打不开`, score: '0.8', reason: '识别到 BI / 报表关键词，优先查页面、权限、报表服务。' }); if (/(下载中心|download)/i.test(system + ' ' + text)) options.push({ title: '下载中心 访问异常处置手册', url: `${base}${query}+下载中心+访问异常`, score: '0.78', reason: '识别到下载中心关键词，优先查下载服务与权限。' }); if (/(实时营销|营销)/i.test(system + ' ' + text)) options.push({ title: '实时营销 链路异常与告警处置', url: `${base}${query}+实时营销+链路+异常`, score: '0.78', reason: '识别到营销链路关键词，优先查消息、任务、依赖服务。' }); if (/(数字员工|机器人|rpa)/i.test(system + ' ' + text)) options.push({ title: '数字员工 / RPA 任务失败排查', url: `${base}${query}+数字员工+任务失败`, score: '0.76', reason: '识别到数字员工关键词，优先查任务调度、账号和执行器。' }); if (/(it工单|工单)/i.test(system + ' ' + text)) options.push({ title: 'IT 工单系统访问异常排查', url: `${base}${query}+IT工单系统+访问异常`, score: '0.75', reason: '识别到工单关键词，优先查系统可用性和登录链路。' }); if (!options.length && text) options.push({ title: '按故障描述搜索处置手册', url: `${base}${query}`, score: '0.66', reason: '当前未命中专用规则，先用故障关键词检索通用处置手册。' }); return options.slice(0, 3); }
+  function selectManualLink(index) { const links = JSON.parse($("manualLinks").dataset.links || "[]"); const link = links[index]; if (!link) return; const win = window.open(link.url, '_blank', 'noopener'); if (!win) window.location.href = link.url; }
+  function renderNarrative(data, latestProbe, windowData, meta) { const alarm = data.alarm; const summary = meta.conclusion_reason || confirmNoteForStatus(alarm.status); const nextSteps = (meta.next_actions || []).slice(0, 3); $("summaryTitle").textContent = `#${alarm.id} ${alarm.system_name || "未知系统"}`; $("summarySubTitle").textContent = meta.decision_gate || summary; $("summaryPill").textContent = statusLabel(alarm.status); $("summaryPill").className = `status ${alarm.status}`; $("summaryConclusion").textContent = meta.conclusion || "-"; $("summaryRisk").textContent = meta.risk_level || "-"; $("summaryProbe").textContent = latestProbe ? probeStatusLabel(latestProbe.probe_status) : "未判断"; $("summaryObservation").textContent = windowData ? statusLabel(windowData.status) : "未启动"; $("summaryNarrative").className = `narrative-box ${alarm.status === "recovered" ? "ok" : alarm.status === "failed" ? "danger" : "warn"}`; $("summaryNarrative").textContent = summary; $("narrativeText").textContent = meta.acceptance_summary || "当前证据不足以形成恢复闭环。"; $("narrativeList").innerHTML = (nextSteps.length ? nextSteps : ["确认现场处置动作", "提交真实拨测结果", "完成观察窗口确认"]).map((item) => `<li>${escapeHtml(item)}</li>`).join(""); $("summaryTitle").className = "summary-headline"; }
+  function renderWorkflow(data) {
+    const alarm = data.alarm;
+    const meta = data.report_meta || {};
+    const probes = data.probe_results || [];
+    const latestProbe = probes[probes.length - 1];
+    const windowData = data.observation_window;
+    const retryingObservation = alarm.status === "waiting_probe_result" && windowData?.same_alarm_received;
+    const retryingFailedProbe = ["waiting_probe_result", "failed"].includes(alarm.status) && latestProbe?.probe_status === "failed";
+    const failedProbeCount = probes.filter((item) => item.probe_status === "failed").length;
+    const probeStepText = retryingObservation ? "观察期收到同类复发告警；继续拨测" : retryingFailedProbe ? `已拨测 ${probes.length} 次，失败 ${failedProbeCount} 次：${latestProbe.ai_summary}；继续拨测` : latestProbe ? `${probeStatusLabel(latestProbe.probe_status)}：${latestProbe.ai_summary}` : "等待拨测";
+    const steps = [
+      ["1 告警发生", "done", eventTime(alarm) || "已导入"],
+      ["2 人工处置", stepClass(alarm.status, ["waiting_manual_recovery"]), alarm.status === "waiting_manual_recovery" ? "等待值班确认" : "已进入验证"],
+      ["3 拨测验证", (retryingObservation || retryingFailedProbe) ? "active" : latestProbe ? (latestProbe.probe_status === "failed" ? "fail" : "done") : stepClass(alarm.status, ["waiting_probe_result"]), probeStepText],
+      ["4 观察窗口", windowData ? (windowData.status === "failed" ? "fail" : windowData.status === "observing" ? "active" : "done") : "", observationWindowText(windowData, alarm.status)],
+      ["5 恢复结论", alarm.status === "failed" ? "fail" : alarm.status === "recovered" ? "done" : alarm.status === "observing" ? "active" : "", meta.conclusion || statusLabel(alarm.status)]
+    ];
+    $("workflowSteps").innerHTML = steps.map(([title, cls, text]) => `<div class="step ${cls}"><b>${escapeHtml(title)}</b><span>${escapeHtml(text)}</span></div>`).join("");
+  }
+  function stepClass(status, activeStatuses) { if (activeStatuses.includes(status)) return "active"; if (["failed"].includes(status)) return "fail"; if (["waiting_probe_result", "observing", "recovered"].includes(status)) return "done"; return ""; }
+  function renderList(id, items) { const node = $(id); node.innerHTML = ""; items.forEach((item) => { const li = document.createElement("li"); li.textContent = item; node.appendChild(li); }); }
+  async function loadProbeCommands(system, text) { const params = new URLSearchParams({ system: system || "", text: text || "" }); const result = await api(`/api/probe-commands?${params}`); renderProbeCommands(result.items || []); }
+  function renderProbeCommands(items) { const node = $("probeCommands"); if (!items.length) { node.textContent = "暂无拨测命令。"; node.dataset.commands = "[]"; return; } node.dataset.commands = JSON.stringify(items); node.innerHTML = `<div class="row" style="justify-content:space-between"><b>建议执行</b><button class="ghost" type="button" onclick="fillProbeChecklist()">一键填入拨测清单</button></div><div class="command-list">${items.map((item, index) => `<div class="command-card"><div class="row" style="justify-content:space-between"><b>${index + 1}. ${escapeHtml(item.title)}</b><span class="status ${item.probe_status || ''}">${escapeHtml(item.pass_hint ? '有通过标准' : '待确认')}</span></div><div class="command-code">${escapeHtml(item.command)}</div><div class="small muted">通过标准：${escapeHtml(item.pass_hint || '按手册判断通过/异常')}</div></div>`).join("")}</div>`; }
+  function renderProbeHistory(items) {
+    const node = $("probeHistory");
+    if (!items.length) { node.classList.add("muted"); node.textContent = "暂无拨测记录。"; return; }
+    node.classList.remove("muted");
+    node.innerHTML = items.map((item, index) => `<div class="probe-history-item ${escapeHtml(item.probe_status || "unknown")}"><div class="row" style="justify-content:space-between"><div><b>第 ${index + 1} 次拨测：${probeStatusLabel(item.probe_status)}</b><div class="small muted">${escapeHtml(item.created_at || "时间未记录")} / ${escapeHtml(item.probe_item || "人工拨测")}</div></div><span class="status ${escapeHtml(item.probe_status || "unknown")}">${escapeHtml(probeStatusLabel(item.probe_status))}</span></div><div>${escapeHtml(item.ai_summary || "")}</div><pre>${escapeHtml(truncate(item.raw_result, 300))}</pre></div>`).join("");
+  }
+  function probeCommandText(item, index) { return `${index + 1}. ${item.title}\n${item.command}\n结果：`; }
+  function fillProbeChecklist() { const commands = JSON.parse($("probeCommands").dataset.commands || "[]"); if (!commands.length) return; $("probeText").value = commands.map(probeCommandText).join("\n\n"); $("probeText").focus(); }
+  function observationWindowText(windowData, status) {
+    if (!windowData) return status === "waiting_probe_result" ? "拨测通过后自动进入观察窗口。" : "观察窗口未启动。";
+    if (windowData.same_alarm_received) return `观察期收到同类复发告警，已退回拨测验证；观察结束时间 ${windowData.end_time || "系统未记录"}。${windowData.final_conclusion || ""}`;
+    if (windowData.manual_confirm_no_alarm || status === "recovered") return `观察结论：截至 ${windowData.end_time || "确认时间"} 未发现同类复发，可支撑已恢复。${windowData.final_conclusion || ""}`;
+    if (windowData.status === "observing") return `观察中：建议最早确认时点 ${windowData.end_time || "待人工补充"}；到点后如未收到同类告警，直接点击确认。`;
+    return windowData.final_conclusion || `观察窗口状态：${statusLabel(windowData.status)}`;
+  }
+  function renderObservationEvidence(data) {
+    const node = $("observationEvidence");
+    const windowData = data.observation_window;
+    const observationSms = (data.sms_messages || []).filter((item) => item.status === "observation_same_alarm").at(-1);
+    node.className = "smart-note observation-evidence";
+    if (observationSms) {
+      node.classList.add("failed");
+      node.innerHTML = `<b>观察期同类复发告警</b><div>${escapeHtml(truncate(observationSms.raw_text, 180))}</div>`;
+      return;
+    }
+    if (windowData?.manual_confirm_no_alarm || data.alarm.status === "recovered") {
+      node.classList.add("ok");
+      node.textContent = observationWindowText(windowData, data.alarm.status);
+      return;
+    }
+    node.textContent = observationWindowText(windowData, data.alarm.status);
+  }
+  function confirmNoteForStatus(status) { if (status === "waiting_manual_recovery") return "确认已完成重启、切换、扩容、回滚等处置动作后，再进入拨测验证。"; if (status === "waiting_probe_result") return "已确认处置完成，请按下方推荐命令拨测并录入结果。"; if (status === "observing") return "拨测通过，正在观察是否有同类告警复发。"; if (status === "recovered") return "恢复验证已闭环，可以查看报告。"; if (status === "failed") return "恢复验证失败，请继续排障后重新验证。"; return "选择告警后确认故障处置动作是否完成。"; }
+  async function markManualRecovery() { if (!currentAlarmId) return; await api(`/api/alarms/${currentAlarmId}/manual-recovery`, { method: "POST", body: JSON.stringify({}) }); await loadAlarm(currentAlarmId); await refreshLeftLists(); }
+  async function submitProbe() { if (!currentAlarmId) return; const rawResult = $("probeText").value.trim(); if (!rawResult) return; const result = await api(`/api/alarms/${currentAlarmId}/probe-result`, { method: "POST", body: JSON.stringify({ raw_result: rawResult }) }); $("probeMessage").textContent = `${probeStatusLabel(result.probe_status)}：${result.next_step}`; $("probeText").value = ""; await loadAlarm(currentAlarmId); await refreshLeftLists(); }
+  async function submitObservationAlarm() { if (!currentAlarmId) return; const rawText = $("observationAlarmText").value.trim(); if (!rawText) return; const result = await api(`/api/alarms/${currentAlarmId}/observation/new-alarm`, { method: "POST", body: JSON.stringify({ raw_text: rawText }) }); $("observationMessage").textContent = result.reason; $("observationAlarmText").value = ""; await loadAlarm(currentAlarmId); await refreshLeftLists(); }
+  async function confirmNoAlarm() { if (!currentAlarmId) return; const result = await api(`/api/alarms/${currentAlarmId}/observation/confirm-no-alarm`, { method: "POST", body: JSON.stringify({ confirmed_by: "值班人员", remark: "截至当前确认时未收到同类BOMC短信" }) }); $("observationMessage").textContent = result.reason; await loadAlarm(currentAlarmId); await refreshLeftLists(); }
+  function openHtmlReport() { if (!Number.isInteger(Number(currentAlarmId)) || Number(currentAlarmId) <= 0) { showError(new Error("请先选择一条告警再打开报告")); return; } window.open(`/reports/${currentAlarmId}`, "_blank", "noopener"); }
+  async function sendReportEmail() { if (!Number.isInteger(Number(currentAlarmId)) || Number(currentAlarmId) <= 0) { $("reportMailMessage").textContent = "请先选择一条告警再发送邮件。"; return; } $("sendReportMailBtn").disabled = true; $("reportMailMessage").textContent = "正在发送恢复报告邮件..."; try { const result = await api(`/api/alarms/${currentAlarmId}/report/email`, { method: "POST", body: JSON.stringify({}) }); $("reportMailMessage").textContent = result.sent ? `邮件已发送：${(result.to || []).join(", ")}` : "邮件未发送。"; } catch (err) { $("reportMailMessage").textContent = `发送失败：${err.message}`; } finally { $("sendReportMailBtn").disabled = false; } }
+  function renderReport(report) {}
+  function startCountdown(windowData) { if (timer) clearInterval(timer); if (!windowData || windowData.status !== "observing") { $("countdown").textContent = windowData ? statusLabel(windowData.status) : "观察窗口：未启动"; return; } const end = new Date(windowData.end_time.replace(" ", "T")).getTime(); const tick = () => { const remaining = Math.max(0, end - Date.now()); const minutes = Math.floor(remaining / 60000); const seconds = Math.floor((remaining % 60000) / 1000); $("countdown").textContent = remaining > 0 ? `距离最早确认 ${minutes}:${String(seconds).padStart(2, "0")}` : "已到最早确认时点，可确认无复发"; }; tick(); timer = setInterval(tick, 1000); }
+  function statusLabel(status) { return { created:"信息不足", waiting_manual_recovery:"信息不足", waiting_probe_result:"信息不足", observing:"需继续观察", recovered:"已恢复", failed:"未恢复", duplicate:"重复", merged_duplicate:"已归并", observation_same_alarm:"未恢复", unknown:"信息不足" }[status] || status; }
+  function probeStatusLabel(status) { return { passed:"成功", failed:"失败", unknown:"待人工确认" }[status] || status; }
+  function truncate(value, max) { const text = String(value || ""); return text.length > max ? `${text.slice(0, max)}...` : text; }
+  function escapeHtml(value) { return String(value || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;"); }
+  $("importSmsBtn").onclick = () => importSms().catch(showError); $("importSmsInlineBtn").onclick = () => importSms().catch(showError); $("smsText").addEventListener("keydown", (event) => { if (event.ctrlKey && event.key === "Enter") importSms().catch(showError); }); $("refreshSmsBtn").onclick = () => refreshLeftLists().catch(showError); $("createAlarmBtn").onclick = () => createAlarm().catch(showError); $("manualRecoveryBtn").onclick = () => markManualRecovery().catch(showError); $("submitProbeBtn").onclick = () => submitProbe().catch(showError); $("submitObservationAlarmBtn").onclick = () => submitObservationAlarm().catch(showError); $("confirmNoAlarmBtn").onclick = () => confirmNoAlarm().catch(showError); $("openReportBtn").onclick = openHtmlReport; $("sendReportMailBtn").onclick = () => sendReportEmail().catch(showError); document.querySelectorAll("#systemQuick button").forEach((btn) => btn.onclick = () => setSystem(btn.dataset.system).catch(showError)); document.querySelectorAll("[data-filter]").forEach((btn) => btn.onclick = () => { queueFilter = btn.dataset.filter; renderStats(); renderAlarmQueue(); });
+  function showError(err) { $("serviceState").textContent = `错误：${err.message}`; }
+  setDefaultAlarmTime(); refreshLeftLists().catch(showError); setInterval(() => { refreshLeftLists().catch(showError); if (currentAlarmId) loadAlarm(currentAlarmId).catch(showError); }, 10000);
+</script>
+</body>
+</html>

@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>系统现场恢复报告</title>
+  <style>
+    :root {
+      --bg: #eef2f6;
+      --paper: #ffffff;
+      --ink: #18202a;
+      --muted: #667085;
+      --line: #d9e0e8;
+      --primary: #155eef;
+      --ok: #067647;
+      --danger: #c4320a;
+      --warn: #b54708;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.6 "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: #101828;
+      color: #fff;
+      padding: 14px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    h1 { margin: 0; font-size: 20px; }
+    h2 { margin: 0 0 12px; font-size: 18px; }
+    a.button, button {
+      border: 0;
+      border-radius: 6px;
+      padding: 9px 12px;
+      color: #fff;
+      background: var(--primary);
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .secondary { background: #344054 !important; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    main {
+      width: min(1100px, 100%);
+      margin: 0 auto;
+      padding: 20px;
+      display: grid;
+      gap: 14px;
+    }
+    .paper {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .summary {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+      gap: 16px;
+      align-items: stretch;
+    }
+    .title { font-size: 28px; margin: 4px 0; }
+    .muted { color: var(--muted); }
+    .result {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px;
+      background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+      box-shadow: 0 10px 30px rgba(16, 24, 40, .06);
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+    .result.recovered { border-color: #75e0a7; background: linear-gradient(180deg, #f0fdf4 0%, #ecfdf3 100%); }
+    .result.failed { border-color: #fda29b; background: linear-gradient(180deg, #fff1f3 0%, #fff7f8 100%); }
+    .result.observing { border-color: #fec84b; background: linear-gradient(180deg, #fffaeb 0%, #fffdf2 100%); }
+    .cards, .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .card, .field {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      min-height: 62px;
+      background: #fff;
+    }
+    .card b, .field b {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .status {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #eef4ff;
+      color: #1849a9;
+    }
+    .status.recovered { background: #ecfdf3; color: var(--ok); }
+    .status.failed { background: #fff1f3; color: var(--danger); }
+    .status.observing { background: #fffaeb; color: var(--warn); }
+    .acceptance-pass { color: var(--ok); font-weight: 700; }
+    .acceptance-fail { color: var(--danger); font-weight: 700; }
+    .acceptance-pending { color: var(--warn); font-weight: 700; }
+    .risk-list { margin: 0; padding-left: 18px; }
+    .timeline { display: grid; gap: 10px; }
+    .step {
+      display: grid;
+      grid-template-columns: 180px minmax(0, 1fr);
+      gap: 12px;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid var(--line); padding: 9px; text-align: left; vertical-align: top; }
+    td { white-space: pre-wrap; word-break: break-word; }
+    th { background: #f8fafc; }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 10px 0 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #f8fafc;
+    }
+    details { border-top: 1px solid var(--line); padding: 10px 0; }
+    details:first-child { border-top: 0; }
+    @media print {
+      header { position: static; }
+      .actions { display: none; }
+      body { background: #fff; }
+      main { padding: 0; }
+      .paper { break-inside: avoid; }
+    }
+    @media (max-width: 820px) {
+      header { align-items: flex-start; flex-direction: column; }
+      .summary, .grid, .cards, .step { grid-template-columns: 1fr; }
+      main { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>系统现场恢复报告</h1>
+    <div class="actions">
+      <a class="button secondary" href="/">返回工作台</a>
+      <button class="secondary" onclick="window.print()">打印 / 另存PDF</button>
+    </div>
+  </header>
+
+  <main id="reportRoot">
+    <section class="paper">正在加载报告...</section>
+  </main>
+
+  <script>
+    const root = document.getElementById("reportRoot");
+    const alarmId = Number(location.pathname.split("/").filter(Boolean).pop());
+    async function api(path) {
+      const res = await fetch(path);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    async function load() {
+      if (!Number.isInteger(alarmId) || alarmId <= 0) {
+        root.innerHTML = `<section class="paper">请先从工作台选择一条告警，再打开HTML报告。</section>`;
+        return;
+      }
+      const data = await api(`/api/alarms/${alarmId}`);
+      render(data);
+    }
+
+    function render(data) {
+      const alarm = data.alarm;
+      const windowData = data.observation_window;
+      const latestProbe = data.probe_results[data.probe_results.length - 1];
+      const meta = data.report_meta || {};
+      const manuals = data.manual_links || meta.manual_recommendations || [];
+      root.innerHTML = `
+        <section class="paper summary">
+          <div>
+            <p class="muted">报告编号：ALARM-${alarm.id}</p>
+            <h2 class="title">${escapeHtml(data.detected_system || alarm.system_name || "未知系统")}现场恢复验证报告</h2>
+            <p><span class="status ${alarm.status}">${escapeHtml(statusLabel(alarm.status))}</span></p>
+            <p class="muted">生成时间：${new Date().toLocaleString()}</p>
+            <div class="grid" style="margin-top:14px">
+              ${card("恢复结论", meta.conclusion)}
+              ${card("风险判断", meta.risk_level)}
+              ${card("闭环进度", meta.acceptance_score)}
+              ${card("拨测状态", latestProbe ? probeStatusLabel(latestProbe.probe_status) : "未判断")}
+              ${card("是否继续观察", meta.risk_judgement?.["是否需要继续观察"])}
+              ${card("是否升级处理", meta.risk_judgement?.["是否需要升级处理"])}
+            </div>
+          </div>
+          <div class="result ${alarm.status}">
+            <h2 style="margin:0">现场结论</h2>
+            <p style="font-size:24px;font-weight:780;margin:0">${escapeHtml(meta.conclusion || "信息不足，待人工确认")}</p>
+            <p style="margin:0">${escapeHtml(meta.conclusion_reason || "恢复验证流程尚未完成。")}</p>
+            <p style="margin:0"><b>处置建议：</b>${escapeHtml(meta.decision_gate || "信息不足：待人工确认")}</p>
+            <p style="margin:0"><b>摘要：</b>${escapeHtml(summaryNarrative(alarm, latestProbe, windowData, meta))}</p>
+          </div>
+        </section>
+
+        <section class="paper">
+          <h2>一、现场摘要</h2>
+          <p class="muted">结论优先显示，详细依据放在后面展开查看。</p>
+        </section>
+
+        <section class="paper">
+          <h2>二、事件基础信息</h2>
+          <div class="grid">
+            ${field("系统名称", meta.event_info?.["系统名称"])}
+            ${field("告警发生时间", meta.event_info?.["告警发生时间"])}
+            ${field("告警来源", meta.event_info?.["告警来源"])}
+            ${field("故障对象", meta.event_info?.["故障对象"])}
+          </div>
+          <div style="margin-top:10px">${objectTable(meta.event_info)}</div>
+        </section>
+
+        <section class="paper">
+          <h2>三、现场处理过程</h2>
+          <div class="grid">
+            ${field("人工确认", meta.process_info?.["是否人工确认"])}
+            ${field("人工确认时间", meta.process_info?.["人工确认时间"])}
+            ${field("是否执行拨测", meta.process_info?.["是否执行拨测"])}
+            ${field("拨测结果", meta.process_info?.["拨测结果"])}
+          </div>
+          <div style="margin-top:10px">${objectTable(meta.process_info)}</div>
+        </section>
+
+        <section class="paper">
+          <h2>四、恢复验证依据</h2>
+          <div class="grid">
+            ${field("告警是否消失", meta.verification_basis?.["告警是否消失"])}
+            ${field("拨测是否成功", meta.verification_basis?.["拨测是否成功"])}
+            ${field("观察窗口内是否复发", meta.verification_basis?.["观察窗口内是否复发"])}
+            ${field("是否还有同类告警", meta.verification_basis?.["是否还有同类告警"])}
+          </div>
+          <div style="margin-top:10px">${objectTable(meta.verification_basis)}</div>
+        </section>
+
+        <section class="paper">
+          <h2>五、风险判断</h2>
+          <div class="grid">
+            ${field("是否需要继续观察", meta.risk_judgement?.["是否需要继续观察"])}
+            ${field("是否需要升级处理", meta.risk_judgement?.["是否需要升级处理"])}
+            ${field("是否需要生成正式故障报告", meta.risk_judgement?.["是否需要生成正式故障报告"])}
+            ${field("是否需要同步记录表", meta.risk_judgement?.["是否需要同步记录表"])}
+          </div>
+          <div style="margin-top:10px">${objectTable(meta.risk_judgement)}</div>
+        </section>
+
+        <section class="paper">
+          <h2>六、手册推荐</h2>
+          ${manualTable(manuals)}
+        </section>
+
+        <section class="paper">
+          <h2>七、需补齐事项</h2>
+          ${riskList(meta.missing_info)}
+        </section>
+
+        <section class="paper">
+          <h2>八、下一步建议</h2>
+          ${riskList(meta.next_actions)}
+        </section>
+
+        <section class="paper">
+          <h2>九、恢复验证闭环依据</h2>
+          <p>${escapeHtml(meta.acceptance_summary || "当前证据不足以支持恢复成功结论。")}</p>
+          ${acceptanceTable(meta.acceptance_criteria)}
+        </section>
+
+        <section class="paper">
+          <h2>十、原始输入与系统记录</h2>
+          ${renderSms(data.sms_messages, alarm.raw_text)}
+        </section>
+      `;
+    }
+
+    function card(label, value) {
+      return `<div class="card"><b>${escapeHtml(label)}</b><span>${escapeHtml(value || "-")}</span></div>`;
+    }
+
+    function field(label, value) {
+      return `<div class="field"><b>${escapeHtml(label)}</b><span>${escapeHtml(value ?? "")}</span></div>`;
+    }
+
+    function objectTable(items) {
+      const entries = Object.entries(items || {});
+      if (!entries.length) return `<p class="muted">待人工补充</p>`;
+      const rows = entries.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(value || "待人工补充")}</td></tr>`).join("");
+      return `<table><tbody>${rows}</tbody></table>`;
+    }
+
+    function manualTable(items) {
+      if (!items || !items.length) return `<p class="muted">待人工补充</p>`;
+      const rows = items.map((item) => `
+        <tr>
+          <td>${escapeHtml(item.title)}</td>
+          <td>${escapeHtml(item.reason)}</td>
+          <td>${escapeHtml(item.score)}</td>
+          <td><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(item.url)}</a></td>
+        </tr>
+      `).join("");
+      return `<table><thead><tr><th>手册标题</th><th>推荐原因</th><th>匹配分数</th><th>手册链接</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function list(title, items) {
+      return `<b>${escapeHtml(title)}</b><ul>${(items || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+    }
+
+    function commandList(title, items) {
+      const rows = (items || []).map((item) => `
+        <li>
+          <b>${escapeHtml(item.title)}</b><br>
+          <code>${escapeHtml(item.command)}</code><br>
+          <span class="muted">通过标准：${escapeHtml(item.pass_hint)}</span>
+        </li>
+      `).join("");
+      return `<b>${escapeHtml(title)}</b><ul>${rows}</ul>`;
+    }
+
+    function step(title, time, text) {
+      return `<div class="step"><div><b>${escapeHtml(title)}</b><br><span class="muted">${escapeHtml(time || "-")}</span></div><div>${escapeHtml(text || "")}</div></div>`;
+    }
+
+    function acceptanceTable(items) {
+      const rows = (items || []).map((item, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(item.name)}</td>
+          <td class="${acceptanceClass(item.status)}">${escapeHtml(item.status)}</td>
+          <td>${escapeHtml(item.evidence)}</td>
+        </tr>
+      `).join("");
+      return `<table><thead><tr><th>序号</th><th>闭环依据</th><th>状态</th><th>验证证据</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function acceptanceClass(status) {
+      if (status === "通过") return "acceptance-pass";
+      if (status === "不通过") return "acceptance-fail";
+      return "acceptance-pending";
+    }
+
+    function riskList(items) {
+      const risks = items && items.length ? items : ["暂无遗留风险记录。"];
+      return `<ul class="risk-list">${risks.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+    }
+
+    function evidenceTable(items) {
+      const rows = (items || []).map((item, index) => `
+        <tr>
+          <td>证据${index + 1}</td>
+          <td>${escapeHtml(item)}</td>
+          <td>${index === 0 ? "告警解析" : index === 1 ? "短信收件箱" : index === 2 ? "拨测判断" : "验证流程"}</td>
+        </tr>
+      `).join("");
+      return `<table><thead><tr><th>编号</th><th>证据内容</th><th>来源</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    function renderSms(messages, fallbackText) {
+      const items = messages && messages.length ? messages : [{ id: "原始告警", status: "alarm_raw", raw_text: fallbackText }];
+      return items.map((item) => `
+        <details>
+          <summary>${escapeHtml(`#${item.id} ${statusLabel(item.status || "")}`)}</summary>
+          <p class="muted">接收时间：${escapeHtml(item.received_at || item.created_at || "-")}</p>
+          <pre>${escapeHtml(item.raw_text || "")}</pre>
+        </details>
+      `).join("");
+    }
+
+    function summaryNarrative(alarm, latestProbe, windowData, meta) {
+      const probe = latestProbe ? `最近一次拨测判断为${probeStatusLabel(latestProbe.probe_status)}` : "尚未录入拨测结果";
+      const observation = windowData ? `观察窗口状态为${statusLabel(windowData.status)}` : "尚未启动观察窗口";
+      return `当前告警类型为${alarm.alarm_type}，${probe}，${observation}。现场恢复结论为：${meta.conclusion || "信息不足，待人工确认"}；处置建议为：${meta.decision_gate || "信息不足：待人工确认"}。`;
+    }
+
+    function statusLabel(status) {
+      return {
+        created: "新建告警",
+        waiting_manual_recovery: "信息不足",
+        waiting_probe_result: "信息不足",
+        observing: "需继续观察",
+        recovered: "已恢复",
+        failed: "未恢复",
+        duplicate: "重复",
+        merged_duplicate: "已归并",
+        observation_same_alarm: "未恢复",
+        unknown: "信息不足",
+        alarm_raw: "原始告警"
+      }[status] || status;
+    }
+
+    function probeStatusLabel(status) {
+      return {
+        passed: "成功",
+        failed: "失败",
+        unknown: "待人工确认",
+      }[status] || status;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    load().catch((err) => {
+      root.innerHTML = `<section class="paper">报告加载失败：${escapeHtml(err.message)}</section>`;
+    });
+  </script>
+</body>
+</html>
