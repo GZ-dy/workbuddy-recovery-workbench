@@ -32,8 +32,10 @@ from rules import (
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+    sys.path.append(str(PROJECT_ROOT))
 LEGACY_DB_PATH = BASE_DIR / ".data" / "workbench.db"
 DEFAULT_DB_PATH = BASE_DIR / "runtime_data" / "workbench.db"
 DB_PATH = Path(os.environ.get("WORKBENCH_DB", DEFAULT_DB_PATH))
