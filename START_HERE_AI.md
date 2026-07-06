@@ -10,6 +10,7 @@
 - 工作台测试：`tests/`
 - 启动脚本：`start_workbench_8123.bat`
 - 当前运行数据库：`runtime_data/workbench.db`，不要提交，不要手工改
+- 旧运行数据归档：`_local_archive/old_runtime_20260706/`，仅用于找回旧库或旧截图，不是当前入口
 
 ## 手册边界
 
@@ -22,7 +23,7 @@
 
 - 根目录 `F:\workbuddy\多域AI故障\本地` 不是一个有效 Git 仓库。
 - `故障手册知识库` 是独立仓库，里面有大量生成文件和手册数据，清理前必须单独验证。
-- 不要把 `.venv/`、`runtime_data/`、`.data/`、`output/`、`*.db`、`mail_config.local.bat` 提交。
+- 不要把 `.venv/`、`runtime_data/`、`_local_archive/`、`.data/`、`output/`、`*.db`、`mail_config.local.bat` 提交。
 
 ## 最小验证
 

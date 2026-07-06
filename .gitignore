@@ -2,6 +2,7 @@
 .data/
 runtime_data/
 output/
+_local_archive/
 __pycache__/
 .agents/
 .codex/
